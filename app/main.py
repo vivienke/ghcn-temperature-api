@@ -1,7 +1,5 @@
 from fastapi import FastAPI
+from app.routes import router as api_router
 
 app = FastAPI(title="GHCN Temperature API")
-
-@app.get("/api/health")
-def health():
-    return {"status": "ok"}
+app.include_router(api_router)
