@@ -1,0 +1,13 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - CACHE_DIR=/cache
+    volumes:
+      - cache:/cache
+    restart: unless-stopped
+
+volumes:
+  cache:
