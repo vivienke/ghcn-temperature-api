@@ -5,6 +5,9 @@ services:
       - "8000:8000"
     environment:
       - CACHE_DIR=/cache
+      - META_TTL_SECONDS=604800
+      - STATION_TTL_SECONDS=2592000
+      - HTTP_TIMEOUT_Sec=60
     volumes:
       - cache:/cache
     restart: unless-stopped

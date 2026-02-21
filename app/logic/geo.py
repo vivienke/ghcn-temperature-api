@@ -18,7 +18,6 @@ def bounding_box(lat: float, lon: float, radius_km: float) -> tuple[float, float
     lat_rad = math.radians(lat)
     delta_lat = radius_km / 111.32  # km pro Grad Breite
 
-    # km pro Grad Länge hängt von cos(lat) ab
     cos_lat = max(1e-12, math.cos(lat_rad))
     delta_lon = radius_km / (111.32 * cos_lat)
 
