@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Dict, List, Literal, Optional
+from typing import Dict, List, Optional, Literal
 
 class HealthResponse(BaseModel):
     status: str
@@ -25,7 +25,7 @@ class StationResult(BaseModel):
     lat: float
     lon: float
     distanceKm: float
-    availability: Optional[Dict[str, StationAvailability]] = None
+    availability: Optional[StationAvailability] = None  # <- vereinheitlicht
 
 class StationsNearbyResponse(BaseModel):
     results: List[StationResult]

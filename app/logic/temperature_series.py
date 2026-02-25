@@ -82,14 +82,15 @@ def _load_daily_df(
 ) -> pd.DataFrame:
     """
     Lädt by_station .csv.gz chunked und filtert so früh wie möglich:
-    - Datum (start_year..end_year)
+    - Datum (start_year..end_year+1 Feb) -> nötig für Winter-Logik (Dez + Jan/Feb Folgejahr)
     - ID == station_id (robust, auch wenn Datei mal nicht strikt 1 Station wäre)
     - ELEMENT in {TMIN, TMAX}
     - VALUE != -9999
     - optional QFLAG leer
     """
     start_date = f"{start_year}0101"
-    end_date = f"{end_year}1231"
+    # NEU: Jan/Feb des Folgejahrs mit einlesen, damit Winter(end_year) = Dez(end_year) + Jan/Feb(end_year+1)
+    end_date = f"{end_year + 1}0229"
 
     chunks: List[pd.DataFrame] = []
 
@@ -107,7 +108,7 @@ def _load_daily_df(
             "QFLAG": "string",
         },
         low_memory=True,
-        chunksize=1_000_000, 
+        chunksize=1_000_000,
     ):
         # Früh filtern
         chunk = chunk[(chunk["DATE"] >= start_date) & (chunk["DATE"] <= end_date)]
@@ -151,7 +152,10 @@ def _add_period_views(df: pd.DataFrame, is_southern: bool) -> pd.DataFrame:
     """
     Baut 2 Views:
     - YEAR: period="YEAR", periodYear=year
-    - SEASON: meteorologische Jahreszeiten, periodYear mit Dec->Folgejahr bei Winter/Sommer (je Hemisphäre)
+    - SEASON: meteorologische Jahreszeiten
+      NEU: Winter/Sommer wird dem Dezember-Jahr zugeordnet:
+           Beispiel Nord: Winter 2025 = Dez 2025 + Jan/Feb 2026
+           => Jan/Feb der boundary-season zählen ins Vorjahr
     """
     # YEAR view
     year_view = df.copy()
@@ -177,9 +181,10 @@ def _add_period_views(df: pd.DataFrame, is_southern: bool) -> pd.DataFrame:
 
     season_view["period"] = season
 
+    # NEU: Jan/Feb der boundary-season zählen ins Vorjahr (statt Dez ins Folgejahr)
     period_year = season_view["year"].copy()
-    dec_boundary = (season_view["month"] == 12) & (season_view["period"] == boundary)
-    period_year.loc[dec_boundary] = period_year.loc[dec_boundary] + 1
+    jan_feb_boundary = season_view["month"].isin([1, 2]) & (season_view["period"] == boundary)
+    period_year.loc[jan_feb_boundary] = period_year.loc[jan_feb_boundary] - 1
     season_view["periodYear"] = period_year
 
     out = pd.concat(

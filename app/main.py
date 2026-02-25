@@ -30,10 +30,11 @@ def create_app() -> FastAPI:
         meta_ttl_seconds=settings.meta_data_ttl_sec,
         )
     station_files = NoaaStationFiles(
-        http=http,
-        cache_dir=cache_dir,
-        station_ttl_seconds=settings.station_ttl_sec,
-    )
+    http=http,
+    cache_dir=cache_dir,
+    station_ttl_seconds=settings.station_ttl_sec,
+    cache_limit=5, 
+)
     metadata_store = MetadataStore(files=meta_files)
     station_search = StationSearchService(metadata=metadata_store)
     series_service = TemperatureSeriesService(

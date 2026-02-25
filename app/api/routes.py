@@ -44,7 +44,8 @@ def stations_nearby(
     validate_year_range(startYear, endYear, min_year=min_year, max_year=max_year)
 
     candidates = station_search.find_nearby(
-        lat=lat, lon=lon,
+        lat=lat,
+        lon=lon,
         radius_km=radiusKm,
         limit=limit,
         start_year=startYear,
@@ -53,20 +54,24 @@ def stations_nearby(
 
     results = []
     for c in candidates:
-        availability = {
-            k: StationAvailability(firstYear=v.firstYear, lastYear=v.lastYear)
-            for k, v in c.availability.items()
-        }
-        results.append(StationResult(
-            stationId=c.stationId,
-            name=c.name,
-            lat=c.lat,
-            lon=c.lon,
-            distanceKm=c.distanceKm,
-            availability=availability,
-        ))
+        availability = StationAvailability(
+            firstYear=c.availability.firstYear,
+            lastYear=c.availability.lastYear,
+        )
+
+        results.append(
+            StationResult(
+                stationId=c.stationId,
+                name=c.name,
+                lat=c.lat,
+                lon=c.lon,
+                distanceKm=c.distanceKm,
+                availability=availability,
+            )
+        )
 
     return StationsNearbyResponse(results=results)
+
 
 @router.get("/stations/{stationId}/series", response_model=StationTemperatureSeriesResponse)
 def station_series(
