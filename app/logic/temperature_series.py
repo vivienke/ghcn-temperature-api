@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -15,11 +15,19 @@ from app.core.exceptions import StationNotFoundError
 # 0 ID, 1 DATE(YYYYMMDD), 2 ELEMENT, 3 DATA_VALUE, 4 MFLAG, 5 QFLAG, 6 SFLAG, 7 OBS_TIME
 COLS = ["ID", "DATE", "ELEMENT", "VALUE", "MFLAG", "QFLAG", "SFLAG", "OBS_TIME"]
 
+DailyDfLoader = Callable[[Path, str, bool, int, int], pd.DataFrame]
+
 
 class TemperatureSeriesService:
-    def __init__(self, metadata: MetadataStore, station_files: NoaaStationFiles):
+    def __init__(
+        self,
+        metadata: MetadataStore,
+        station_files: NoaaStationFiles,
+        daily_df_loader: DailyDfLoader | None = None,
+    ):
         self.metadata = metadata
         self.station_files = station_files
+        self._daily_df_loader = daily_df_loader or _load_daily_df
 
     def compute_temperature_series(
         self,
@@ -52,7 +60,7 @@ class TemperatureSeriesService:
         return years, series
 
     def _load_and_filter_data(self, data_path: Path, station_id: str, ignore_qflag: bool, start_year: int, end_year: int, is_southern: bool) -> pd.DataFrame:
-        df = _load_daily_df(
+        df = self._daily_df_loader(
             gz_path=data_path,
             station_id=station_id,
             ignore_qflag=ignore_qflag,
@@ -176,15 +184,10 @@ def _add_period_views(df: pd.DataFrame, is_southern: bool) -> pd.DataFrame:
     season_view = df.copy()
     month_series = season_view["month"]
 
-    # Northern meteorological seasons
-    season_labels = np.full(len(season_view), "WINTER", dtype=object)
-    season_labels[(month_series >= 3) & (month_series <= 5)] = "SPRING"
-    season_labels[(month_series >= 6) & (month_series <= 8)] = "SUMMER"
-    season_labels[(month_series >= 9) & (month_series <= 11)] = "AUTUMN"
+    season_labels = _build_northern_season_labels(month_series)
 
     if is_southern:
-        season_map = {"WINTER": "SUMMER", "SPRING": "AUTUMN", "SUMMER": "WINTER", "AUTUMN": "SPRING"}
-        season_labels = np.vectorize(season_map.get)(season_labels)
+        season_labels = _map_southern_hemisphere_seasons(season_labels)
         boundary_season = "SUMMER"  # südliche Hemisphäre: Sommer ist Dec-Feb
     else:
         boundary_season = "WINTER"  # nördliche Hemisphäre: Winter ist Dec-Feb
@@ -192,9 +195,7 @@ def _add_period_views(df: pd.DataFrame, is_southern: bool) -> pd.DataFrame:
     season_view["period"] = season_labels
 
     # NEU: Jan/Feb der boundary-season zählen ins Vorjahr (statt Dez ins Folgejahr)
-    period_years = season_view["year"].copy()
-    jan_feb_boundary_mask = season_view["month"].isin([1, 2]) & (season_view["period"] == boundary_season)
-    period_years.loc[jan_feb_boundary_mask] = period_years.loc[jan_feb_boundary_mask] - 1
+    period_years = _compute_period_years_for_boundary_season(season_view, boundary_season)
     season_view["periodYear"] = period_years
 
     out = pd.concat(
@@ -205,6 +206,34 @@ def _add_period_views(df: pd.DataFrame, is_southern: bool) -> pd.DataFrame:
         ignore_index=True,
     )
     return out
+
+
+def _build_northern_season_labels(month_series: pd.Series) -> np.ndarray:
+    season_labels = np.full(len(month_series), "WINTER", dtype=object)
+    season_labels[(month_series >= 3) & (month_series <= 5)] = "SPRING"
+    season_labels[(month_series >= 6) & (month_series <= 8)] = "SUMMER"
+    season_labels[(month_series >= 9) & (month_series <= 11)] = "AUTUMN"
+    return season_labels
+
+
+def _map_southern_hemisphere_seasons(season_labels: np.ndarray) -> np.ndarray:
+    season_map = {
+        "WINTER": "SUMMER",
+        "SPRING": "AUTUMN",
+        "SUMMER": "WINTER",
+        "AUTUMN": "SPRING",
+    }
+    return np.vectorize(season_map.get)(season_labels)
+
+
+def _compute_period_years_for_boundary_season(
+    season_view: pd.DataFrame,
+    boundary_season: str,
+) -> pd.Series:
+    period_years = season_view["year"].copy()
+    jan_feb_boundary_mask = season_view["month"].isin([1, 2]) & (season_view["period"] == boundary_season)
+    period_years.loc[jan_feb_boundary_mask] = period_years.loc[jan_feb_boundary_mask] - 1
+    return period_years
 
 
 def _empty_series(years: List[int]) -> Dict[str, List[Optional[float]]]:

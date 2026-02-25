@@ -9,7 +9,7 @@ from app.api.schemas import (
     StationsNearbyResponse,
     StationTemperatureSeriesResponse,
 )
-from app.core.exceptions import StationNotFoundError, InvalidYearRangeError, DataUnavailableError
+from app.core.exceptions import StationNotFoundError, DataUnavailableError
 from app.api.helpers import _validate_years, _to_station_result
 
 router = APIRouter(prefix="/api")
