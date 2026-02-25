@@ -15,7 +15,7 @@ from app.exceptions import StationNotFoundError
 # 0 ID, 1 DATE(YYYYMMDD), 2 ELEMENT, 3 DATA_VALUE, 4 MFLAG, 5 QFLAG, 6 SFLAG, 7 OBS_TIME
 DAILY_DATA_COLUMNS = ["ID", "DATE", "ELEMENT", "VALUE", "MFLAG", "QFLAG", "SFLAG", "OBS_TIME"]
 
-DailyDfLoader = Callable[[Path, str, bool, int, int], pd.DataFrame]
+DailyDataLoader = Callable[[Path, str, bool, int, int], pd.DataFrame]
 
 
 class TemperatureSeriesService:
@@ -23,11 +23,11 @@ class TemperatureSeriesService:
         self,
         metadata: StationMetadataStore,
         station_files: NoaaStationFileStore,
-        daily_df_loader: DailyDfLoader | None = None,
+        daily_data_loader: DailyDataLoader | None = None,
     ):
         self.metadata = metadata
         self.station_files = station_files
-        self._daily_df_loader = daily_df_loader or _load_daily_df
+        self._daily_data_loader = daily_data_loader or _load_daily_data
 
     def compute_temperature_series(
         self,
@@ -36,14 +36,17 @@ class TemperatureSeriesService:
         end_year: int,
         ignore_qflag: bool = True,
     ) -> Tuple[List[int], Dict[str, List[Optional[float]]]]:
+        # 1) Metadaten sicherstellen und Station prüfen
         self.metadata.ensure_loaded()
         if station_id not in self.metadata.stations_by_id:
             raise StationNotFoundError(f"Station '{station_id}' not found")
 
+        # 2) Ergebnisstruktur vorbereiten
         years, series = self._initialize_series(start_year, end_year)
         station = self.metadata.stations_by_id[station_id]
         is_southern = float(station.lat) < 0
 
+        # 3) Tagesdaten laden und auf Zeitraum/Qualität filtern
         station_path = self.station_files.ensure_station_file(station_id)
         period_df = self._load_and_filter_data(
             station_path,
@@ -57,8 +60,9 @@ class TemperatureSeriesService:
         if period_df.empty:
             return years, series
 
-        aggregated_df = self._aggregate_data(period_df)
-        self._fill_series(series, years, aggregated_df)
+        # 4) Mittelwerte pro Zeitraum berechnen und in Serien schreiben
+        period_avg_df = self._calculate_period_averages(period_df)
+        self._apply_series_values(series, years, period_avg_df)
         return years, series
 
     def _initialize_series(self, start_year: int, end_year: int) -> Tuple[List[int], Dict[str, List[Optional[float]]]]:
@@ -67,7 +71,7 @@ class TemperatureSeriesService:
         return years, series
 
     def _load_and_filter_data(self, station_path: Path, station_id: str, ignore_qflag: bool, start_year: int, end_year: int, is_southern: bool) -> pd.DataFrame:
-        daily_df = self._daily_df_loader(
+        daily_df = self._daily_data_loader(
             gz_path=station_path,
             station_id=station_id,
             ignore_qflag=ignore_qflag,
@@ -77,28 +81,33 @@ class TemperatureSeriesService:
         if daily_df.empty:
             return daily_df
 
-        daily_df = _add_time_cols(daily_df)
-        period_df = _add_period_views(daily_df, is_southern)
+        daily_df = _add_date_parts(daily_df)
+        period_df = _build_period_views(daily_df, is_southern)
         return self._filter_period_years(period_df, start_year, end_year)
 
     @staticmethod
     def _filter_period_years(period_df: pd.DataFrame, start_year: int, end_year: int) -> pd.DataFrame:
         return period_df[(period_df["periodYear"] >= start_year) & (period_df["periodYear"] <= end_year)]
 
-    def _aggregate_data(self, period_df: pd.DataFrame) -> pd.DataFrame:
-        aggregated_df = (
-            period_df.groupby(["periodYear", "period", "ELEMENT"])["valueC"]
+    def _calculate_period_averages(self, period_df: pd.DataFrame) -> pd.DataFrame:
+        period_avg_df = (
+            period_df.groupby(["periodYear", "period", "ELEMENT"])["temperature_celsius"]
             .mean()
             .unstack("ELEMENT")
             .reset_index()
         )
-        return aggregated_df
+        return period_avg_df
 
-    def _fill_series(self, series: Dict[str, List[Optional[float]]], years: List[int], aggregated_df: pd.DataFrame) -> None:
-        _fill_series(series, years, aggregated_df)
+    def _apply_series_values(
+        self,
+        series: Dict[str, List[Optional[float]]],
+        years: List[int],
+        period_avg_df: pd.DataFrame,
+    ) -> None:
+        _apply_series_values(series, years, period_avg_df)
 
 
-def _load_daily_df(
+def _load_daily_data(
     gz_path: Path,
     station_id: str,
     ignore_qflag: bool,
@@ -119,7 +128,7 @@ def _load_daily_df(
 
     filtered_chunks: List[pd.DataFrame] = []
 
-    for chunk_df in _iter_daily_chunks(gz_path):
+    for chunk_df in _read_daily_chunks(gz_path):
         filtered_chunk_df = _filter_daily_chunk(
             chunk_df=chunk_df,
             station_id=station_id,
@@ -131,10 +140,10 @@ def _load_daily_df(
             continue
         filtered_chunks.append(filtered_chunk_df)
 
-    return _build_daily_value_df(filtered_chunks)
+    return _build_daily_frame(filtered_chunks)
 
 
-def _iter_daily_chunks(gz_path: Path):
+def _read_daily_chunks(gz_path: Path):
     return pd.read_csv(
         gz_path,
         compression="gzip",
@@ -182,22 +191,22 @@ def _filter_daily_chunk(
     return filtered_df
 
 
-def _build_daily_value_df(filtered_chunks: List[pd.DataFrame]) -> pd.DataFrame:
+def _build_daily_frame(filtered_chunks: List[pd.DataFrame]) -> pd.DataFrame:
     if not filtered_chunks:
-        return pd.DataFrame(columns=["DATE", "ELEMENT", "valueC"])
+        return pd.DataFrame(columns=["DATE", "ELEMENT", "temperature_celsius"])
 
     daily_df = pd.concat(filtered_chunks, ignore_index=True)
-    daily_df["valueC"] = daily_df["VALUE"] / 10.0
-    return daily_df[["DATE", "ELEMENT", "valueC"]]
+    daily_df["temperature_celsius"] = daily_df["VALUE"] / 10.0
+    return daily_df[["DATE", "ELEMENT", "temperature_celsius"]]
 
 
-def _add_time_cols(daily_df: pd.DataFrame) -> pd.DataFrame:
+def _add_date_parts(daily_df: pd.DataFrame) -> pd.DataFrame:
     daily_df["year"] = daily_df["DATE"].str.slice(0, 4).astype("int32")
     daily_df["month"] = daily_df["DATE"].str.slice(4, 6).astype("int8")
     return daily_df
 
 
-def _add_period_views(daily_df: pd.DataFrame, is_southern: bool) -> pd.DataFrame:
+def _build_period_views(daily_df: pd.DataFrame, is_southern: bool) -> pd.DataFrame:
     """
     Baut 2 Views:
     - YEAR: period="YEAR", periodYear=year
@@ -231,8 +240,8 @@ def _add_period_views(daily_df: pd.DataFrame, is_southern: bool) -> pd.DataFrame
 
     combined_df = pd.concat(
         [
-            year_view[["periodYear", "period", "ELEMENT", "valueC"]],
-            season_view[["periodYear", "period", "ELEMENT", "valueC"]],
+            year_view[["periodYear", "period", "ELEMENT", "temperature_celsius"]],
+            season_view[["periodYear", "period", "ELEMENT", "temperature_celsius"]],
         ],
         ignore_index=True,
     )
@@ -276,19 +285,23 @@ def _empty_series(years: List[int]) -> Dict[str, List[Optional[float]]]:
     return series
 
 
-def _fill_series(series: Dict[str, List[Optional[float]]], years: List[int], aggregated_df: pd.DataFrame) -> None:
+def _apply_series_values(
+    series: Dict[str, List[Optional[float]]],
+    years: List[int],
+    period_avg_df: pd.DataFrame,
+) -> None:
     first_year = years[0]
     year_count = len(years)
 
-    for _, aggregated_row in aggregated_df.iterrows():
-        period_year = int(aggregated_row["periodYear"])
-        period = str(aggregated_row["period"])
+    for _, avg_row in period_avg_df.iterrows():
+        period_year = int(avg_row["periodYear"])
+        period = str(avg_row["period"])
         year_index = period_year - first_year
         if year_index < 0 or year_index >= year_count:
             continue
 
-        _set_value(series, period, "TMIN", year_index, aggregated_row.get("TMIN"))
-        _set_value(series, period, "TMAX", year_index, aggregated_row.get("TMAX"))
+        _set_value(series, period, "TMIN", year_index, avg_row.get("TMIN"))
+        _set_value(series, period, "TMAX", year_index, avg_row.get("TMAX"))
 
 
 def _set_value(series: Dict[str, List[Optional[float]]], period: str, element: str, year_index: int, raw_celsius_value) -> None:
