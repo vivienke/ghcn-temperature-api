@@ -13,6 +13,7 @@ from app.api.schemas import (
 from app.api.validation import validate_year_range
 from app.exceptions.station import StationNotFoundError
 from app.exceptions.validation import InvalidYearRangeError
+from app.exceptions.data import DataUnavailableError
 
 router = APIRouter(prefix="/api")
 
@@ -48,14 +49,17 @@ def stations_nearby(
     except InvalidYearRangeError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    candidates = station_search.find_nearby(
-        lat=lat,
-        lon=lon,
-        radius_km=radiusKm,
-        limit=limit,
-        start_year=startYear,
-        end_year=endYear,
-    )
+    try:
+        candidates = station_search.find_nearby(
+            lat=lat,
+            lon=lon,
+            radius_km=radiusKm,
+            limit=limit,
+            start_year=startYear,
+            end_year=endYear,
+        )
+    except DataUnavailableError as e:
+        raise HTTPException(status_code=503, detail=f"Service temporarily unavailable: {str(e)}")
 
     results = []
     for c in candidates:
@@ -104,6 +108,8 @@ def station_series(
         )
     except StationNotFoundError:
         raise HTTPException(status_code=404, detail=f"Station '{stationId}' not found.")
+    except DataUnavailableError as e:
+        raise HTTPException(status_code=503, detail=f"Service temporarily unavailable: {str(e)}")
 
     return StationTemperatureSeriesResponse(
         stationId=stationId,

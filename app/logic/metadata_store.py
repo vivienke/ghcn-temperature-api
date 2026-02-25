@@ -6,6 +6,7 @@ import threading
 
 from app.data.noaa_metadata_files import NoaaMetadataFiles
 from app.models.station import Station, Availability
+from app.exceptions.data import DataUnavailableError
 
 
 class MetadataStore:
@@ -21,7 +22,10 @@ class MetadataStore:
         self._mtime_key: Tuple[float, float] = (-1.0, -1.0)
 
     def ensure_loaded(self) -> None:
-        paths = self.files.ensure()
+        try:
+            paths = self.files.ensure()
+        except Exception as e:
+            raise DataUnavailableError(f"Failed to load metadata files: {str(e)}")
         current_key = self._make_mtime_key(paths.stations, paths.inventory)
 
         # Dateien unverändert -> nichts tun
@@ -30,7 +34,10 @@ class MetadataStore:
 
         # Dateien neu/anders -> unter Lock neu laden
         with self._lock:
-            paths = self.files.ensure()
+            try:
+                paths = self.files.ensure()
+            except Exception as e:
+                raise DataUnavailableError(f"Failed to load metadata files: {str(e)}")
             current_key = self._make_mtime_key(paths.stations, paths.inventory)
             if self._mtime_key == current_key:
                 return
