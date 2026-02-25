@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-PERIODS = ("YEAR", "SPRING", "SUMMER", "AUTUMN", "WINTER")
+from app.constants.temperature import PERIODS
 
 def month_to_season_northern(month: int) -> str:
     if 3 <= month <= 5:

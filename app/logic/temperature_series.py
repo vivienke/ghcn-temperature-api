@@ -8,9 +8,7 @@ import pandas as pd
 
 from app.logic.metadata_store import MetadataStore
 from app.data.noaa_station_files import NoaaStationFiles
-
-ELEMENTS: Tuple[str, str] = ("TMIN", "TMAX")
-PERIODS: Tuple[str, str, str, str, str] = ("YEAR", "SPRING", "SUMMER", "AUTUMN", "WINTER")
+from app.constants.temperature import ELEMENTS, PERIODS
 
 # by_station has no header:
 # 0 ID, 1 DATE(YYYYMMDD), 2 ELEMENT, 3 DATA_VALUE, 4 MFLAG, 5 QFLAG, 6 SFLAG, 7 OBS_TIME

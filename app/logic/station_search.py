@@ -4,9 +4,9 @@ from typing import List, Optional
 from operator import attrgetter
 
 from app.logic.geo import bounding_box, haversine_km
-from app.logic.metadata_store import MetadataStore, Availability
-
-REQUIRED_ELEMENTS = ("TMIN", "TMAX")
+from app.logic.metadata_store import MetadataStore
+from app.models.station import Availability
+from app.constants.temperature import ELEMENTS
 
 
 @dataclass(frozen=True)
