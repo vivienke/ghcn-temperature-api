@@ -27,10 +27,6 @@ class NoaaMetadataFiles:
         self._ensure_file(STATIONS_URL, metadata_paths.stations, self.meta_ttl_seconds)
         self._ensure_file(INVENTORY_URL, metadata_paths.inventory, self.meta_ttl_seconds)
 
-        # safety fallback (z.B. first run)
-        self._ensure_file(STATIONS_URL, metadata_paths.stations, None, require_exists=True)
-        self._ensure_file(INVENTORY_URL, metadata_paths.inventory, None, require_exists=True)
-
         return metadata_paths
 
     def _metadata_paths(self) -> MetadataPaths:
@@ -43,9 +39,6 @@ class NoaaMetadataFiles:
         self,
         url: str,
         dest_path: Path,
-        max_age_seconds: int | None,
-        require_exists: bool = False,
+        ttl_seconds: int | None,
     ) -> None:
-        if require_exists and dest_path.exists():
-            return
-        self.http.fetch_to_file(url, dest_path, ttl_seconds=max_age_seconds)
+        self.http.fetch_to_file(url, dest_path, ttl_seconds=ttl_seconds)

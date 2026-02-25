@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import threading
-from dataclasses import dataclass
 from pathlib import Path
 from typing import List
 
@@ -12,25 +11,20 @@ AWS_BASE = "https://noaa-ghcn-pds.s3.amazonaws.com"
 BY_STATION_URL = f"{AWS_BASE}/csv.gz/by_station/{{station_id}}.csv.gz"
 
 
-@dataclass(frozen=True)
-class StationCacheState:
-    # Reihenfolge: älteste zuerst, neueste zuletzt
-    order: List[str]
-
-
 class NoaaStationFiles:
     def __init__(
         self,
         http: HttpCache,
         cache_dir: Path,
         station_ttl_seconds: int,
-        cache_limit: int = 5,  # <- nur die letzten 5 Stationen behalten
+        cache_limit: int = 5,
     ):
         self.http = http
         self.cache_dir = cache_dir
         self.station_ttl_seconds = station_ttl_seconds
         self.cache_limit = cache_limit
 
+        # Schützt den gemeinsamen Cache-Status bei parallelen Requests.
         self._lock = threading.Lock()
         self._state_path = self.cache_dir / "stations" / "by_station" / "state.json"
 
@@ -60,22 +54,21 @@ class NoaaStationFiles:
 
     def _update_cache_state(self, station_cache_dir: Path, station_id: str) -> None:
         with self._lock:
-            cache_state = self._load_state(station_cache_dir)
-            self._touch(cache_state, station_id)
-            self._evict_if_needed(cache_state, station_cache_dir)
-            self._save_state(cache_state, station_cache_dir)
+            order = self._load_state(station_cache_dir)
+            self._touch(order, station_id)
+            self._evict_if_needed(order, station_cache_dir)
+            self._save_state(order, station_cache_dir)
 
     # -----------------------
     # Statusverwaltung (persistiert im Volume)
     # -----------------------
 
-    def _load_state(self, station_cache_dir: Path) -> StationCacheState:
+    def _load_state(self, station_cache_dir: Path) -> List[str]:
         station_cache_dir.mkdir(parents=True, exist_ok=True)
 
         if not self._state_path.exists():
             # Wenn kein Status vorhanden ist: aus Dateien bestmöglich rekonstruieren
-            order = self._rebuild_order_from_files(station_cache_dir)
-            return StationCacheState(order=order)
+            return self._rebuild_order_from_files(station_cache_dir)
 
         try:
             state_data = json.loads(self._state_path.read_text(encoding="utf-8"))
@@ -84,14 +77,13 @@ class NoaaStationFiles:
                 station_order = []
             # nur strings behalten
             station_order = [x for x in station_order if isinstance(x, str) and x]
-            return StationCacheState(order=station_order)
+            return station_order
         except (OSError, json.JSONDecodeError, TypeError, ValueError):
-            order = self._rebuild_order_from_files(station_cache_dir)
-            return StationCacheState(order=order)
+            return self._rebuild_order_from_files(station_cache_dir)
 
-    def _save_state(self, state: StationCacheState, station_cache_dir: Path) -> None:
+    def _save_state(self, order: List[str], station_cache_dir: Path) -> None:
         station_cache_dir.mkdir(parents=True, exist_ok=True)
-        self._state_path.write_text(json.dumps({"order": state.order}, indent=2), encoding="utf-8")
+        self._state_path.write_text(json.dumps({"order": order}, indent=2), encoding="utf-8")
 
     def _rebuild_order_from_files(self, station_cache_dir: Path) -> List[str]:
         # Rekonstruktion: sortiere nach mtime (älteste zuerst)
@@ -107,14 +99,14 @@ class NoaaStationFiles:
     # LRU-ähnlich: "zuletzt genutzt" ans Ende schieben
     # -----------------------
 
-    def _touch(self, state: StationCacheState, station_id: str) -> None:
-        if station_id in state.order:
-            state.order.remove(station_id)
-        state.order.append(station_id)
+    def _touch(self, order: List[str], station_id: str) -> None:
+        if station_id in order:
+            order.remove(station_id)
+        order.append(station_id)
 
-    def _evict_if_needed(self, state: StationCacheState, station_cache_dir: Path) -> None:
-        while len(state.order) > self.cache_limit:
-            oldest = state.order.pop(0)
+    def _evict_if_needed(self, order: List[str], station_cache_dir: Path) -> None:
+        while len(order) > self.cache_limit:
+            oldest = order.pop(0)
             file_path = station_cache_dir / f"{oldest}.csv.gz"
             try:
                 if file_path.exists():
