@@ -6,7 +6,7 @@ from operator import attrgetter
 from app.logic.geo import bounding_box, haversine_km
 from app.logic.metadata_store import MetadataStore
 from app.models.station import Availability
-from app.constants.temperature import ELEMENTS
+from app.constants.temperature_constants import ELEMENTS
 
 
 @dataclass(frozen=True)
