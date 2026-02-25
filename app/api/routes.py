@@ -17,7 +17,7 @@ from app.api.validation import validate_years_or_raise_http_400
 router = APIRouter(prefix="/api")
 
 @router.get("/health", response_model=HealthResponse)
-async def health(request: Request):
+async def health():
     return HealthResponse(status="ok")
 
 @router.get("/meta", response_model=MetaResponse)
@@ -25,7 +25,16 @@ async def meta(request: Request):
     metadata_store = request.app.state.metadata_store
     min_year = metadata_store.ui_min_year()
     max_year = date.today().year - 1
-    return MetaResponse(ui=UiLimits(minYear=min_year, maxYear=max_year))
+    return MetaResponse(
+        ui=UiLimits(
+            minYear=min_year,
+            maxYear=max_year,
+            radiusKmMin=1,
+            radiusKmMax=100,
+            limitMin=1,
+            limitMax=10,
+        )
+    )
 
 @router.get("/stations/nearby", response_model=StationsNearbyResponse)
 async def stations_nearby(
@@ -54,6 +63,7 @@ async def stations_nearby(
     except DataUnavailableError as e:
         raise HTTPException(status_code=503, detail=f"Service temporarily unavailable: {str(e)}")
 
+    # Kandidaten aus der Logik-Schicht in API-Response-Objekte umwandeln
     results = [
         StationResult(
             stationId=candidate.stationId,

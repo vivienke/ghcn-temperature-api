@@ -43,4 +43,5 @@ class StationTemperatureSeriesResponse(BaseModel):
     startYear: int
     endYear: int
     years: List[int]
+    #durch Optional null-Werte erlauben,falls Datenlücken vorhanden sind
     series: Dict[str, List[Optional[float]]]

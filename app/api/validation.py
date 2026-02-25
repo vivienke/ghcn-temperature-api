@@ -1,4 +1,3 @@
-import asyncio
 from datetime import date
 
 from fastapi import HTTPException, Request
@@ -6,7 +5,7 @@ from fastapi import HTTPException, Request
 from app.exceptions import InvalidYearRangeError
 
 
-def validate_year_range(start_year: int, end_year: int, *, min_year: int, max_year: int) -> None:
+def validate_year_range(start_year: int, end_year: int, min_year: int, max_year: int) -> None:
     if start_year > end_year:
         raise InvalidYearRangeError(
             f"Invalid year range: startYear ({start_year}) must be <= endYear ({end_year})."
@@ -26,8 +25,6 @@ async def validate_years_or_raise_http_400(request: Request, start_year: int, en
     min_year = metadata_store.ui_min_year()
     max_year = date.today().year - 1
     try:
-        await asyncio.to_thread(
-            validate_year_range, start_year, end_year, min_year=min_year, max_year=max_year
-        )
+        validate_year_range(start_year, end_year, min_year=min_year, max_year=max_year)
     except InvalidYearRangeError as e:
         raise HTTPException(status_code=400, detail=str(e))
