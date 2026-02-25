@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Query, Request, HTTPException
 from datetime import date
+import asyncio
 
 from app.api.schemas import (
     HealthResponse,
@@ -18,19 +19,19 @@ from app.exceptions.data import DataUnavailableError
 router = APIRouter(prefix="/api")
 
 @router.get("/health", response_model=HealthResponse)
-def health(request: Request):
+async def health(request: Request):
     metadata_store = request.app.state.metadata_store
     return HealthResponse(status="ok")
 
 @router.get("/meta", response_model=MetaResponse)
-def meta(request: Request):
+async def meta(request: Request):
     metadata_store = request.app.state.metadata_store
     min_year = metadata_store.ui_min_year()
     max_year = date.today().year - 1
     return MetaResponse(ui=UiLimits(minYear=min_year, maxYear=max_year))
 
 @router.get("/stations/nearby", response_model=StationsNearbyResponse)
-def stations_nearby(
+async def stations_nearby(
     request: Request,
     lat: float,
     lon: float,
@@ -50,7 +51,8 @@ def stations_nearby(
         raise HTTPException(status_code=400, detail=str(e))
 
     try:
-        candidates = station_search.find_nearby(
+        candidates = await asyncio.to_thread(
+            station_search.find_nearby,
             lat=lat,
             lon=lon,
             radius_km=radiusKm,
@@ -83,7 +85,7 @@ def stations_nearby(
 
 
 @router.get("/stations/{stationId}/series", response_model=StationTemperatureSeriesResponse)
-def station_series(
+async def station_series(
     request: Request,
     stationId: str,
     startYear: int = Query(...),
@@ -100,7 +102,8 @@ def station_series(
         raise HTTPException(status_code=400, detail=str(e))
 
     try:
-        years, series = series_service.compute_temperature_series(
+        years, series = await asyncio.to_thread(
+            series_service.compute_temperature_series,
             station_id=stationId,
             start_year=startYear,
             end_year=endYear,
