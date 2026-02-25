@@ -9,6 +9,11 @@ import pandas as pd
 from app.logic.station_metadata_store import StationMetadataStore
 from app.data.noaa_station_files import NoaaStationFileStore
 from app.logic.constants import ELEMENTS, PERIODS
+from app.logic.temperature_calculation import (
+    apply_series_values,
+    build_empty_series,
+    calculate_period_averages,
+)
 from app.exceptions import StationNotFoundError
 
 # by_station hat keine Header-Zeile:
@@ -61,13 +66,13 @@ class TemperatureSeriesService:
             return years, series
 
         # 4) Mittelwerte pro Zeitraum berechnen und in Serien schreiben
-        period_avg_df = self._calculate_period_averages(period_df)
-        self._apply_series_values(series, years, period_avg_df)
+        period_avg_df = calculate_period_averages(period_df)
+        apply_series_values(series, years, period_avg_df)
         return years, series
 
     def _initialize_series(self, start_year: int, end_year: int) -> Tuple[List[int], Dict[str, List[Optional[float]]]]:
         years = list(range(start_year, end_year + 1))
-        series = _empty_series(years)
+        series = build_empty_series(years, PERIODS, ELEMENTS)
         return years, series
 
     def _load_and_filter_data(self, station_path: Path, station_id: str, ignore_qflag: bool, start_year: int, end_year: int, is_southern: bool) -> pd.DataFrame:
@@ -88,24 +93,6 @@ class TemperatureSeriesService:
     @staticmethod
     def _filter_period_years(period_df: pd.DataFrame, start_year: int, end_year: int) -> pd.DataFrame:
         return period_df[(period_df["periodYear"] >= start_year) & (period_df["periodYear"] <= end_year)]
-
-    def _calculate_period_averages(self, period_df: pd.DataFrame) -> pd.DataFrame:
-        period_avg_df = (
-            period_df.groupby(["periodYear", "period", "ELEMENT"])["temperature_celsius"]
-            .mean()
-            .unstack("ELEMENT")
-            .reset_index()
-        )
-        return period_avg_df
-
-    def _apply_series_values(
-        self,
-        series: Dict[str, List[Optional[float]]],
-        years: List[int],
-        period_avg_df: pd.DataFrame,
-    ) -> None:
-        _apply_series_values(series, years, period_avg_df)
-
 
 def _load_daily_data(
     gz_path: Path,
@@ -276,40 +263,3 @@ def _compute_period_years_for_boundary_season(
     return period_years
 
 
-def _empty_series(years: List[int]) -> Dict[str, List[Optional[float]]]:
-    year_count = len(years)
-    series: Dict[str, List[Optional[float]]] = {}
-    for period in PERIODS:
-        for element in ELEMENTS:
-            series[f"{period}_{element}"] = [None] * year_count
-    return series
-
-
-def _apply_series_values(
-    series: Dict[str, List[Optional[float]]],
-    years: List[int],
-    period_avg_df: pd.DataFrame,
-) -> None:
-    first_year = years[0]
-    year_count = len(years)
-
-    for _, avg_row in period_avg_df.iterrows():
-        period_year = int(avg_row["periodYear"])
-        period = str(avg_row["period"])
-        year_index = period_year - first_year
-        if year_index < 0 or year_index >= year_count:
-            continue
-
-        _set_value(series, period, "TMIN", year_index, avg_row.get("TMIN"))
-        _set_value(series, period, "TMAX", year_index, avg_row.get("TMAX"))
-
-
-def _set_value(series: Dict[str, List[Optional[float]]], period: str, element: str, year_index: int, raw_celsius_value) -> None:
-    series_key = f"{period}_{element}"
-    series[series_key][year_index] = _round_or_none(raw_celsius_value)
-
-
-def _round_or_none(value) -> Optional[float]:
-    if value is None or pd.isna(value):
-        return None
-    return round(float(value), 1)
