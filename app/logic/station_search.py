@@ -4,8 +4,7 @@ from typing import List, Optional
 from operator import attrgetter
 
 from app.logic.geo import bounding_box, haversine_km
-from app.logic.metadata_store import MetadataStore
-from app.models.station import Availability, Station
+from app.logic.metadata_store import Availability, MetadataStore, Station
 
 
 @dataclass(frozen=True)

@@ -1,12 +1,26 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Tuple
 import threading
 
 from app.data.noaa_metadata_files import NoaaMetadataFiles
-from app.models.station import Station, Availability
 from app.exceptions import DataUnavailableError
+
+
+@dataclass(frozen=True)
+class Station:
+    stationId: str
+    lat: float
+    lon: float
+    name: str
+
+
+@dataclass(frozen=True)
+class Availability:
+    firstYear: int
+    lastYear: int
 
 
 class MetadataStore:
