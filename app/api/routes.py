@@ -7,15 +7,10 @@ from app.api.schemas import (
     MetaResponse,
     UiLimits,
     StationsNearbyResponse,
-    StationResult,
-    StationAvailability,
     StationTemperatureSeriesResponse,
 )
-from app.api.validation import validate_year_range
-from app.exceptions.station import StationNotFoundError
-from app.exceptions.validation import InvalidYearRangeError
-from app.exceptions.data import DataUnavailableError
-from app.api.helpers import _validate_years
+from app.exceptions import StationNotFoundError, InvalidYearRangeError, DataUnavailableError
+from app.api.helpers import _validate_years, _to_station_result
 
 router = APIRouter(prefix="/api")
 
@@ -59,23 +54,7 @@ async def stations_nearby(
     except DataUnavailableError as e:
         raise HTTPException(status_code=503, detail=f"Service temporarily unavailable: {str(e)}")
 
-    results = []
-    for candidate in candidates:
-        availability = StationAvailability(
-            firstYear=candidate.availability.firstYear,
-            lastYear=candidate.availability.lastYear,
-        )
-
-        results.append(
-            StationResult(
-                stationId=candidate.stationId,
-                name=candidate.name,
-                lat=candidate.lat,
-                lon=candidate.lon,
-                distanceKm=candidate.distanceKm,
-                availability=availability,
-            )
-        )
+    results = [_to_station_result(candidate) for candidate in candidates]
 
     return StationsNearbyResponse(results=results)
 

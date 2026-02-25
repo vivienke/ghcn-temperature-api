@@ -1,4 +1,4 @@
-from app.exceptions.validation import InvalidYearRangeError
+from app.exceptions import InvalidYearRangeError
 
 def validate_year_range(start_year: int, end_year: int, *, min_year: int, max_year: int) -> None:
     if start_year > end_year:

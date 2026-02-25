@@ -6,7 +6,7 @@ import threading
 
 from app.data.noaa_metadata_files import NoaaMetadataFiles
 from app.models.station import Station, Availability
-from app.exceptions.data import DataUnavailableError
+from app.exceptions import DataUnavailableError
 
 
 class MetadataStore:
@@ -22,10 +22,7 @@ class MetadataStore:
         self._mtime_key: Tuple[float, float] = (-1.0, -1.0)
 
     def ensure_loaded(self) -> None:
-        try:
-            paths = self.files.ensure()
-        except Exception as e:
-            raise DataUnavailableError(f"Failed to load metadata files: {str(e)}")
+        paths = self._ensure_paths()
         current_key = self._make_mtime_key(paths.stations, paths.inventory)
 
         # Dateien unverändert -> nichts tun
@@ -34,10 +31,7 @@ class MetadataStore:
 
         # Dateien neu/anders -> unter Lock neu laden
         with self._lock:
-            try:
-                paths = self.files.ensure()
-            except Exception as e:
-                raise DataUnavailableError(f"Failed to load metadata files: {str(e)}")
+            paths = self._ensure_paths()
             current_key = self._make_mtime_key(paths.stations, paths.inventory)
             if self._mtime_key == current_key:
                 return
@@ -51,6 +45,12 @@ class MetadataStore:
     def ui_min_year(self) -> int:
         self.ensure_loaded()
         return self._ui_min_year
+
+    def _ensure_paths(self):
+        try:
+            return self.files.ensure()
+        except Exception as e:
+            raise DataUnavailableError(f"Failed to load metadata files: {str(e)}")
 
     @staticmethod
     def _make_mtime_key(stations_path: Path, inventory_path: Path) -> Tuple[float, float]:
@@ -69,15 +69,10 @@ def _parse_stations(path: Path) -> Dict[str, Station]:
 
     with path.open("r", encoding="utf-8", errors="replace") as f:
         for line in f:
-            if len(line) < NAME_SLICE.stop:
+            station = _parse_station_line(line, ID_SLICE, LAT_SLICE, LON_SLICE, NAME_SLICE)
+            if station is None:
                 continue
-
-            station_id = line[ID_SLICE].strip()
-            lat = float(line[LAT_SLICE].strip())
-            lon = float(line[LON_SLICE].strip())
-            name = line[NAME_SLICE].strip()
-
-            stations[station_id] = Station(stationId=station_id, lat=lat, lon=lon, name=name)
+            stations[station.stationId] = station
 
     return stations
 
@@ -95,16 +90,12 @@ def _parse_inventory(path: Path) -> Dict[str, Dict[str, Availability]]:
 
     with path.open("r", encoding="utf-8", errors="replace") as f:
         for line in f:
-            if len(line) < LASTYEAR_SLICE.stop:
+            parsed = _parse_inventory_line(
+                line, ID_SLICE, ELEMENT_SLICE, FIRSTYEAR_SLICE, LASTYEAR_SLICE
+            )
+            if parsed is None:
                 continue
-
-            element = line[ELEMENT_SLICE].strip()
-            if element not in ("TMIN", "TMAX"):
-                continue
-
-            station_id = line[ID_SLICE].strip()
-            first_year = int(line[FIRSTYEAR_SLICE].strip())
-            last_year = int(line[LASTYEAR_SLICE].strip())
+            station_id, element, first_year, last_year = parsed
 
             # 1) Station-Dict holen oder neu anlegen
             if station_id not in inv:
@@ -123,6 +114,43 @@ def _parse_inventory(path: Path) -> Dict[str, Dict[str, Availability]]:
                 )
 
     return inv
+
+
+def _parse_station_line(
+    line: str,
+    id_slice: slice,
+    lat_slice: slice,
+    lon_slice: slice,
+    name_slice: slice,
+) -> Station | None:
+    if len(line) < name_slice.stop:
+        return None
+
+    station_id = line[id_slice].strip()
+    lat = float(line[lat_slice].strip())
+    lon = float(line[lon_slice].strip())
+    name = line[name_slice].strip()
+    return Station(stationId=station_id, lat=lat, lon=lon, name=name)
+
+
+def _parse_inventory_line(
+    line: str,
+    id_slice: slice,
+    element_slice: slice,
+    firstyear_slice: slice,
+    lastyear_slice: slice,
+) -> Tuple[str, str, int, int] | None:
+    if len(line) < lastyear_slice.stop:
+        return None
+
+    element = line[element_slice].strip()
+    if element not in ("TMIN", "TMAX"):
+        return None
+
+    station_id = line[id_slice].strip()
+    first_year = int(line[firstyear_slice].strip())
+    last_year = int(line[lastyear_slice].strip())
+    return station_id, element, first_year, last_year
 
 
 def _compute_ui_min_year(inv_by_id: Dict[str, Dict[str, Availability]]) -> int:

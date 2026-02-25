@@ -3,7 +3,9 @@ from datetime import date
 import asyncio
 
 from app.api.validation import validate_year_range
-from app.exceptions.validation import InvalidYearRangeError
+from app.api.schemas import StationAvailability, StationResult
+from app.exceptions import InvalidYearRangeError
+from app.logic.station_search import StationCandidate
 
 
 async def _validate_years(request, start_year: int, end_year: int) -> None:
@@ -16,3 +18,18 @@ async def _validate_years(request, start_year: int, end_year: int) -> None:
         )
     except InvalidYearRangeError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+def _to_station_result(candidate: StationCandidate) -> StationResult:
+    availability = StationAvailability(
+        firstYear=candidate.availability.firstYear,
+        lastYear=candidate.availability.lastYear,
+    )
+    return StationResult(
+        stationId=candidate.stationId,
+        name=candidate.name,
+        lat=candidate.lat,
+        lon=candidate.lon,
+        distanceKm=candidate.distanceKm,
+        availability=availability,
+    )

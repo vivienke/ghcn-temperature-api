@@ -9,7 +9,7 @@ import pandas as pd
 from app.logic.metadata_store import MetadataStore
 from app.data.noaa_station_files import NoaaStationFiles
 from app.constants.temperature_constants import ELEMENTS, PERIODS
-from app.exceptions.station import StationNotFoundError
+from app.exceptions import StationNotFoundError
 
 # by_station has no header:
 # 0 ID, 1 DATE(YYYYMMDD), 2 ELEMENT, 3 DATA_VALUE, 4 MFLAG, 5 QFLAG, 6 SFLAG, 7 OBS_TIME
@@ -42,7 +42,7 @@ class TemperatureSeriesService:
         if df.empty:
             return years, series
 
-        aggregated_data = self._aggregate_data(df, start_year, end_year)
+        aggregated_data = self._aggregate_data(df)
         self._fill_series(series, years, aggregated_data)
         return years, series
 
@@ -64,10 +64,13 @@ class TemperatureSeriesService:
 
         df = _add_time_cols(df)
         df = _add_period_views(df, is_southern)
-        df = df[(df["periodYear"] >= start_year) & (df["periodYear"] <= end_year)]
-        return df
+        return self._filter_period_years(df, start_year, end_year)
 
-    def _aggregate_data(self, df: pd.DataFrame, start_year: int, end_year: int) -> pd.DataFrame:
+    @staticmethod
+    def _filter_period_years(df: pd.DataFrame, start_year: int, end_year: int) -> pd.DataFrame:
+        return df[(df["periodYear"] >= start_year) & (df["periodYear"] <= end_year)]
+
+    def _aggregate_data(self, df: pd.DataFrame) -> pd.DataFrame:
         table = (
             df.groupby(["periodYear", "period", "ELEMENT"])["valueC"]
             .mean()

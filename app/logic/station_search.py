@@ -43,31 +43,19 @@ class StationSearchService:
         candidates: List[StationCandidate] = []
 
         for station in self.metadata.stations_by_id.values():
-            if not (min_lat <= station.lat <= max_lat and min_lon <= station.lon <= max_lon):
+            if not self._is_within_bbox(station, min_lat, max_lat, min_lon, max_lon):
                 continue
 
-            dist = haversine_km(lat, lon, station.lat, station.lon)
-            if dist > radius_km:
+            dist = self._distance_km(lat, lon, station)
+            if not self._is_within_radius(dist, radius_km):
                 continue
 
-            inv = self.metadata.inventory_by_id.get(station.stationId, {})
-
-            # Muss TMIN und TMAX haben und beide müssen den Zeitraum abdecken
-            tmin = inv.get("TMIN")
-            tmax = inv.get("TMAX")
-            if tmin is None or tmax is None:
-                continue
-            if not _passes_year_filter(tmin.firstYear, tmin.lastYear, start_year, end_year):
-                continue
-            if not _passes_year_filter(tmax.firstYear, tmax.lastYear, start_year, end_year):
-                continue
-
-            # Gemeinsamer Zeitraum (Schnittmenge)
-            first_year = max(tmin.firstYear, tmax.firstYear)
-            last_year = min(tmin.lastYear, tmax.lastYear)
-
-            # Safety: falls irgendwann doch mal keine Überschneidung existiert
-            if first_year > last_year:
+            availability = self._get_overlap_availability(
+                station_id=station.stationId,
+                start_year=start_year,
+                end_year=end_year,
+            )
+            if availability is None:
                 continue
 
             candidates.append(
@@ -77,9 +65,45 @@ class StationSearchService:
                     lat=station.lat,
                     lon=station.lon,
                     distanceKm=round(dist, 3),
-                    availability=Availability(firstYear=first_year, lastYear=last_year),
+                    availability=availability,
                 )
             )
 
         candidates.sort(key=attrgetter("distanceKm"))
         return candidates[:limit]
+
+    @staticmethod
+    def _is_within_bbox(station: "Station", min_lat: float, max_lat: float, min_lon: float, max_lon: float) -> bool:
+        return min_lat <= station.lat <= max_lat and min_lon <= station.lon <= max_lon
+
+    @staticmethod
+    def _distance_km(lat: float, lon: float, station: "Station") -> float:
+        return haversine_km(lat, lon, station.lat, station.lon)
+
+    @staticmethod
+    def _is_within_radius(distance_km: float, radius_km: int) -> bool:
+        return distance_km <= radius_km
+
+    def _get_overlap_availability(
+        self,
+        station_id: str,
+        start_year: int,
+        end_year: int,
+    ) -> Optional[Availability]:
+        inv = self.metadata.inventory_by_id.get(station_id, {})
+
+        tmin = inv.get("TMIN")
+        tmax = inv.get("TMAX")
+        if tmin is None or tmax is None:
+            return None
+        if not _passes_year_filter(tmin.firstYear, tmin.lastYear, start_year, end_year):
+            return None
+        if not _passes_year_filter(tmax.firstYear, tmax.lastYear, start_year, end_year):
+            return None
+
+        first_year = max(tmin.firstYear, tmax.firstYear)
+        last_year = min(tmin.lastYear, tmax.lastYear)
+        if first_year > last_year:
+            return None
+
+        return Availability(firstYear=first_year, lastYear=last_year)
