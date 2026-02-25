@@ -41,22 +41,21 @@ class HttpCache:
         #
         #    Warum? Damit niemals eine "halb geschriebene" Datei existiert,
         #    falls der Download unterbrochen wird oder parallel jemand liest.
-        tmp_dir = Path(tempfile.mkdtemp(prefix="dl_", dir=str(dest.parent)))
-        tmp_file = tmp_dir / (dest.name + ".tmp")
+        temp_dir, temp_file = self._create_temp_file(dest)
 
         try:
             # 3) Download in Temp-Datei (kann fehlschlagen; dest bleibt dabei unangetastet)
-            self._download(url, tmp_file)
+            self._download(url, temp_file)
 
             # 4) Atomarer Austausch:
             #    Entweder existiert die alte dest-Datei ODER schon die neue.
             #    Es gibt keinen Zwischenzustand "halb neu".
-            os.replace(tmp_file, dest)
+            self._replace_atomic(temp_file, dest)
 
             return True
         finally:
             # 5) Aufräumen: Temp-Ordner löschen (egal ob Erfolg oder Fehler)
-            shutil.rmtree(tmp_dir, ignore_errors=True)
+            self._cleanup_temp_dir(temp_dir)
 
     def _is_cache_hit(self, dest: Path, max_age_seconds: int | None) -> bool:
         """
@@ -93,11 +92,25 @@ class HttpCache:
             headers={"User-Agent": self.user_agent},
             follow_redirects=True,
         ) as client:
-            with client.stream("GET", url) as r:
-                r.raise_for_status()
+            with client.stream("GET", url) as response:
+                response.raise_for_status()
 
                 # Binär schreiben
-                with out_file.open("wb") as f:
-                    for chunk in r.iter_bytes():
+                with out_file.open("wb") as file_handle:
+                    for chunk in response.iter_bytes():
                         if chunk:
-                            f.write(chunk)
+                            file_handle.write(chunk)
+
+    @staticmethod
+    def _create_temp_file(dest: Path) -> tuple[Path, Path]:
+        temp_dir = Path(tempfile.mkdtemp(prefix="dl_", dir=str(dest.parent)))
+        temp_file = temp_dir / (dest.name + ".tmp")
+        return temp_dir, temp_file
+
+    @staticmethod
+    def _replace_atomic(temp_file: Path, dest: Path) -> None:
+        os.replace(temp_file, dest)
+
+    @staticmethod
+    def _cleanup_temp_dir(temp_dir: Path) -> None:
+        shutil.rmtree(temp_dir, ignore_errors=True)

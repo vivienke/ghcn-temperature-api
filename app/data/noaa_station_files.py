@@ -35,21 +35,35 @@ class NoaaStationFiles:
         self._state_path = self.cache_dir / "stations" / "by_station" / "state.json"
 
     def ensure_station_gz(self, station_id: str) -> Path:
-        by_station_dir = self.cache_dir / "stations" / "by_station"
-        path = by_station_dir / f"{station_id}.csv.gz"
-        url = BY_STATION_URL.format(station_id=station_id)
+        by_station_dir = self._station_dir()
+        station_path = self._station_path(by_station_dir, station_id)
+        station_url = self._station_url(station_id)
 
-        downloaded = self.http.get_to_file(url, path, max_age_seconds=self.station_ttl_seconds)
+        self.http.get_to_file(station_url, station_path, max_age_seconds=self.station_ttl_seconds)
 
         # Cachelimit anwenden (auch wenn nur "genutzt", nicht nur "downloaded")
         if self.cache_limit > 0:
-            with self._lock:
-                state = self._load_state(by_station_dir)
-                self._touch(state, station_id)
-                self._evict_if_needed(state, by_station_dir)
-                self._save_state(state, by_station_dir)
+            self._update_cache_state(by_station_dir, station_id)
 
-        return path
+            return station_path
+
+    def _station_dir(self) -> Path:
+        return self.cache_dir / "stations" / "by_station"
+
+    @staticmethod
+    def _station_path(by_station_dir: Path, station_id: str) -> Path:
+        return by_station_dir / f"{station_id}.csv.gz"
+
+    @staticmethod
+    def _station_url(station_id: str) -> str:
+        return BY_STATION_URL.format(station_id=station_id)
+
+    def _update_cache_state(self, by_station_dir: Path, station_id: str) -> None:
+        with self._lock:
+            cache_state = self._load_state(by_station_dir)
+            self._touch(cache_state, station_id)
+            self._evict_if_needed(cache_state, by_station_dir)
+            self._save_state(cache_state, by_station_dir)
 
     # -----------------------
     # State Handling (persistiert im Volume)
@@ -64,13 +78,13 @@ class NoaaStationFiles:
             return StationCacheState(order=order)
 
         try:
-            data = json.loads(self._state_path.read_text(encoding="utf-8"))
-            order = data.get("order", [])
-            if not isinstance(order, list):
-                order = []
+            state_data = json.loads(self._state_path.read_text(encoding="utf-8"))
+            station_order = state_data.get("order", [])
+            if not isinstance(station_order, list):
+                station_order = []
             # nur strings behalten
-            order = [x for x in order if isinstance(x, str) and x]
-            return StationCacheState(order=order)
+            station_order = [x for x in station_order if isinstance(x, str) and x]
+            return StationCacheState(order=station_order)
         except Exception:
             order = self._rebuild_order_from_files(by_station_dir)
             return StationCacheState(order=order)

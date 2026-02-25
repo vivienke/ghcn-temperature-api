@@ -9,14 +9,13 @@ from app.api.schemas import (
     StationsNearbyResponse,
     StationTemperatureSeriesResponse,
 )
-from app.exceptions import StationNotFoundError, InvalidYearRangeError, DataUnavailableError
+from app.core.exceptions import StationNotFoundError, InvalidYearRangeError, DataUnavailableError
 from app.api.helpers import _validate_years, _to_station_result
 
 router = APIRouter(prefix="/api")
 
 @router.get("/health", response_model=HealthResponse)
 async def health(request: Request):
-    metadata_store = request.app.state.metadata_store
     return HealthResponse(status="ok")
 
 @router.get("/meta", response_model=MetaResponse)
@@ -36,7 +35,6 @@ async def stations_nearby(
     startYear: int = Query(...),
     endYear: int = Query(...),
 ):
-    metadata_store = request.app.state.metadata_store
     station_search = request.app.state.station_search
 
     await _validate_years(request, startYear, endYear)
@@ -66,7 +64,6 @@ async def station_series(
     startYear: int = Query(...),
     endYear: int = Query(...),
 ):
-    metadata_store = request.app.state.metadata_store
     series_service = request.app.state.series_service
 
     await _validate_years(request, startYear, endYear)

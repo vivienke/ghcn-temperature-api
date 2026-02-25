@@ -6,7 +6,7 @@ import threading
 
 from app.data.noaa_metadata_files import NoaaMetadataFiles
 from app.models.station import Station, Availability
-from app.exceptions import DataUnavailableError
+from app.core.exceptions import DataUnavailableError
 
 
 class MetadataStore:
@@ -86,7 +86,7 @@ def _parse_inventory(path: Path) -> Dict[str, Dict[str, Availability]]:
 
     #Dict key stations_id, value Dict mit key Element (TMIN/TMAX) und 
     # value Availability(firstYear, lastYear)
-    inv: Dict[str, Dict[str, Availability]] = {}
+    inventory_by_station: Dict[str, Dict[str, Availability]] = {}
 
     with path.open("r", encoding="utf-8", errors="replace") as f:
         for line in f:
@@ -98,22 +98,22 @@ def _parse_inventory(path: Path) -> Dict[str, Dict[str, Availability]]:
             station_id, element, first_year, last_year = parsed
 
             # 1) Station-Dict holen oder neu anlegen
-            if station_id not in inv:
-                inv[station_id] = {}
+            if station_id not in inventory_by_station:
+                inventory_by_station[station_id] = {}
 
-            station_inv = inv[station_id]
+            station_inventory = inventory_by_station[station_id]
 
             # 2) Element setzen oder "Spanne erweitern"
-            if element not in station_inv:
-                station_inv[element] = Availability(firstYear=first_year, lastYear=last_year)
+            if element not in station_inventory:
+                station_inventory[element] = Availability(firstYear=first_year, lastYear=last_year)
             else:
-                prev = station_inv[element]
-                station_inv[element] = Availability(
-                    firstYear=min(prev.firstYear, first_year),
-                    lastYear=max(prev.lastYear, last_year),
+                previous = station_inventory[element]
+                station_inventory[element] = Availability(
+                    firstYear=min(previous.firstYear, first_year),
+                    lastYear=max(previous.lastYear, last_year),
                 )
 
-    return inv
+    return inventory_by_station
 
 
 def _parse_station_line(
@@ -160,13 +160,13 @@ def _compute_ui_min_year(inv_by_id: Dict[str, Dict[str, Availability]]) -> int:
     min_tmin = 10**9
     min_tmax = 10**9
 
-    for m in inv_by_id.values():
-        if "TMIN" in m:
+    for station_inventory in inv_by_id.values():
+        if "TMIN" in station_inventory:
             found_tmin = True
-            min_tmin = min(min_tmin, m["TMIN"].firstYear)
-        if "TMAX" in m:
+            min_tmin = min(min_tmin, station_inventory["TMIN"].firstYear)
+        if "TMAX" in station_inventory:
             found_tmax = True
-            min_tmax = min(min_tmax, m["TMAX"].firstYear)
+            min_tmax = min(min_tmax, station_inventory["TMAX"].firstYear)
 
     if not found_tmin and not found_tmax:
         return 0

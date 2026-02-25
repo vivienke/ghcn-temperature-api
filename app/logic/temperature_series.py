@@ -8,8 +8,8 @@ import pandas as pd
 
 from app.logic.metadata_store import MetadataStore
 from app.data.noaa_station_files import NoaaStationFiles
-from app.constants.temperature_constants import ELEMENTS, PERIODS
-from app.exceptions import StationNotFoundError
+from app.core.constants import ELEMENTS, PERIODS
+from app.core.exceptions import StationNotFoundError
 
 # by_station has no header:
 # 0 ID, 1 DATE(YYYYMMDD), 2 ELEMENT, 3 DATA_VALUE, 4 MFLAG, 5 QFLAG, 6 SFLAG, 7 OBS_TIME
@@ -174,28 +174,28 @@ def _add_period_views(df: pd.DataFrame, is_southern: bool) -> pd.DataFrame:
 
     # SEASON view (vektorisiert)
     season_view = df.copy()
-    m = season_view["month"]
+    month_series = season_view["month"]
 
     # Northern meteorological seasons
-    season = np.full(len(season_view), "WINTER", dtype=object)
-    season[(m >= 3) & (m <= 5)] = "SPRING"
-    season[(m >= 6) & (m <= 8)] = "SUMMER"
-    season[(m >= 9) & (m <= 11)] = "AUTUMN"
+    season_labels = np.full(len(season_view), "WINTER", dtype=object)
+    season_labels[(month_series >= 3) & (month_series <= 5)] = "SPRING"
+    season_labels[(month_series >= 6) & (month_series <= 8)] = "SUMMER"
+    season_labels[(month_series >= 9) & (month_series <= 11)] = "AUTUMN"
 
     if is_southern:
-        mapping = {"WINTER": "SUMMER", "SPRING": "AUTUMN", "SUMMER": "WINTER", "AUTUMN": "SPRING"}
-        season = np.vectorize(mapping.get)(season)
-        boundary = "SUMMER"  # südliche Hemisphäre: Sommer ist Dec-Feb
+        season_map = {"WINTER": "SUMMER", "SPRING": "AUTUMN", "SUMMER": "WINTER", "AUTUMN": "SPRING"}
+        season_labels = np.vectorize(season_map.get)(season_labels)
+        boundary_season = "SUMMER"  # südliche Hemisphäre: Sommer ist Dec-Feb
     else:
-        boundary = "WINTER"  # nördliche Hemisphäre: Winter ist Dec-Feb
+        boundary_season = "WINTER"  # nördliche Hemisphäre: Winter ist Dec-Feb
 
-    season_view["period"] = season
+    season_view["period"] = season_labels
 
     # NEU: Jan/Feb der boundary-season zählen ins Vorjahr (statt Dez ins Folgejahr)
-    period_year = season_view["year"].copy()
-    jan_feb_boundary = season_view["month"].isin([1, 2]) & (season_view["period"] == boundary)
-    period_year.loc[jan_feb_boundary] = period_year.loc[jan_feb_boundary] - 1
-    season_view["periodYear"] = period_year
+    period_years = season_view["year"].copy()
+    jan_feb_boundary_mask = season_view["month"].isin([1, 2]) & (season_view["period"] == boundary_season)
+    period_years.loc[jan_feb_boundary_mask] = period_years.loc[jan_feb_boundary_mask] - 1
+    season_view["periodYear"] = period_years
 
     out = pd.concat(
         [

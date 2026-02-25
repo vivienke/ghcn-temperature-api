@@ -6,7 +6,7 @@ from operator import attrgetter
 from app.logic.geo import bounding_box, haversine_km
 from app.logic.metadata_store import MetadataStore
 from app.models.station import Availability
-from app.constants.temperature_constants import ELEMENTS
+from app.core.constants import ELEMENTS
 
 
 @dataclass(frozen=True)
@@ -46,8 +46,8 @@ class StationSearchService:
             if not self._is_within_bbox(station, min_lat, max_lat, min_lon, max_lon):
                 continue
 
-            dist = self._distance_km(lat, lon, station)
-            if not self._is_within_radius(dist, radius_km):
+            distance_km = self._distance_km(lat, lon, station)
+            if not self._is_within_radius(distance_km, radius_km):
                 continue
 
             availability = self._get_overlap_availability(
@@ -64,7 +64,7 @@ class StationSearchService:
                     name=station.name,
                     lat=station.lat,
                     lon=station.lon,
-                    distanceKm=round(dist, 3),
+                    distanceKm=round(distance_km, 3),
                     availability=availability,
                 )
             )
@@ -90,19 +90,23 @@ class StationSearchService:
         start_year: int,
         end_year: int,
     ) -> Optional[Availability]:
-        inv = self.metadata.inventory_by_id.get(station_id, {})
+        inventory = self.metadata.inventory_by_id.get(station_id, {})
 
-        tmin = inv.get("TMIN")
-        tmax = inv.get("TMAX")
-        if tmin is None or tmax is None:
+        tmin_availability = inventory.get("TMIN")
+        tmax_availability = inventory.get("TMAX")
+        if tmin_availability is None or tmax_availability is None:
             return None
-        if not _passes_year_filter(tmin.firstYear, tmin.lastYear, start_year, end_year):
+        if not _passes_year_filter(
+            tmin_availability.firstYear, tmin_availability.lastYear, start_year, end_year
+        ):
             return None
-        if not _passes_year_filter(tmax.firstYear, tmax.lastYear, start_year, end_year):
+        if not _passes_year_filter(
+            tmax_availability.firstYear, tmax_availability.lastYear, start_year, end_year
+        ):
             return None
 
-        first_year = max(tmin.firstYear, tmax.firstYear)
-        last_year = min(tmin.lastYear, tmax.lastYear)
+        first_year = max(tmin_availability.firstYear, tmax_availability.firstYear)
+        last_year = min(tmin_availability.lastYear, tmax_availability.lastYear)
         if first_year > last_year:
             return None
 

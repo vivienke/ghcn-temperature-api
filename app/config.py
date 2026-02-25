@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 import os
 
-from app.constants.config import (
+from app.core.config_defaults import (
     CACHE_DIR_DEFAULT,
     META_DATA_TTL_SEC_DEFAULT,
     STATION_TTL_SEC_DEFAULT,

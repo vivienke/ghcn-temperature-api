@@ -19,17 +19,30 @@ class NoaaMetadataFiles:
         self.meta_ttl_seconds = meta_ttl_seconds
 
     def ensure(self) -> MetadataPaths:
-        meta_dir = self.cache_dir / "meta"
-        stations = meta_dir / "ghcnd-stations.txt"
-        inventory = meta_dir / "ghcnd-inventory.txt"
+        paths = self._metadata_paths()
 
-        self.http.get_to_file(STATIONS_URL, stations, max_age_seconds=self.meta_ttl_seconds)
-        self.http.get_to_file(INVENTORY_URL, inventory, max_age_seconds=self.meta_ttl_seconds)
+        self._ensure_file(STATIONS_URL, paths.stations, self.meta_ttl_seconds)
+        self._ensure_file(INVENTORY_URL, paths.inventory, self.meta_ttl_seconds)
 
         # safety fallback (z.B. first run)
-        if not stations.exists():
-            self.http.get_to_file(STATIONS_URL, stations, max_age_seconds=None)
-        if not inventory.exists():
-            self.http.get_to_file(INVENTORY_URL, inventory, max_age_seconds=None)
+        self._ensure_file(STATIONS_URL, paths.stations, None, require_exists=True)
+        self._ensure_file(INVENTORY_URL, paths.inventory, None, require_exists=True)
 
-        return MetadataPaths(stations=stations, inventory=inventory)
+        return paths
+
+    def _metadata_paths(self) -> MetadataPaths:
+        metadata_dir = self.cache_dir / "meta"
+        stations_path = metadata_dir / "ghcnd-stations.txt"
+        inventory_path = metadata_dir / "ghcnd-inventory.txt"
+        return MetadataPaths(stations=stations_path, inventory=inventory_path)
+
+    def _ensure_file(
+        self,
+        url: str,
+        path: Path,
+        max_age_seconds: int | None,
+        require_exists: bool = False,
+    ) -> None:
+        if require_exists and path.exists():
+            return
+        self.http.get_to_file(url, path, max_age_seconds=max_age_seconds)
