@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 import logging
 
@@ -15,6 +16,17 @@ from app.logic.temperature_series import TemperatureSeriesService
 
 def create_app() -> FastAPI:
     app = FastAPI(title="GHCN Temperature API")
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://localhost:8080",
+            "http://127.0.0.1:8080",
+        ],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     # Einfaches Basis-Logging konfigurieren
     logging.basicConfig(level=logging.WARNING)
