@@ -1,0 +1,27 @@
+{
+  "name": "ghcn-temperature-api",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+"scripts": {
+  "test:unit": "python -m pytest -q",
+  "test:system": "newman run app/test/postman/collection.json -e app/test/postman/local.postman_environment.json",
+  "test:all": "npm run test:unit && npm run test:system"
+},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vivienke/ghcn-temperature-api.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/vivienke/ghcn-temperature-api/issues"
+  },
+  "homepage": "https://github.com/vivienke/ghcn-temperature-api#readme",
+  "devDependencies": {
+    "newman": "^6.2.2"
+  }
+}
+
