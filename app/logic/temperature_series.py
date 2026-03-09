@@ -39,7 +39,7 @@ class TemperatureSeriesService:
         station_id: str,
         start_year: int,
         end_year: int,
-        ignore_qflag: bool = True,
+        use_qflag_filter: bool = True,
     ) -> Tuple[List[int], Dict[str, List[Optional[float]]]]:
         # 1) Metadaten sicherstellen und Station prüfen
         self.metadata.ensure_loaded()
@@ -51,12 +51,12 @@ class TemperatureSeriesService:
         station = self.metadata.stations_by_id[station_id]
         is_southern = float(station.lat) < 0
 
-        # 3) Tagesdaten laden und auf Zeitraum/Qualität filtern
+        # 3) Tagesdaten laden, in Monatsmittel überführen und auf Zeitraum/Qualität filtern
         station_path = self.station_files.ensure_station_file(station_id)
         period_df = self._load_and_filter_data(
             station_path,
             station_id,
-            ignore_qflag,
+            use_qflag_filter,
             start_year,
             end_year,
             is_southern,
@@ -75,11 +75,11 @@ class TemperatureSeriesService:
         series = build_empty_series(years, PERIODS, ELEMENTS)
         return years, series
 
-    def _load_and_filter_data(self, station_path: Path, station_id: str, ignore_qflag: bool, start_year: int, end_year: int, is_southern: bool) -> pd.DataFrame:
+    def _load_and_filter_data(self, station_path: Path, station_id: str, use_qflag_filter: bool, start_year: int, end_year: int, is_southern: bool) -> pd.DataFrame:
         daily_df = self._daily_data_loader(
             gz_path=station_path,
             station_id=station_id,
-            ignore_qflag=ignore_qflag,
+            use_qflag_filter=use_qflag_filter,
             start_year=start_year,
             end_year=end_year,
         )
@@ -87,7 +87,8 @@ class TemperatureSeriesService:
             return daily_df
 
         daily_df = _add_date_parts(daily_df)
-        period_df = _build_period_views(daily_df, is_southern)
+        monthly_df = _build_monthly_means(daily_df)
+        period_df = _build_period_views(monthly_df, is_southern)
         return self._filter_period_years(period_df, start_year, end_year)
 
     @staticmethod
@@ -97,7 +98,7 @@ class TemperatureSeriesService:
 def _load_daily_data(
     gz_path: Path,
     station_id: str,
-    ignore_qflag: bool,
+    use_qflag_filter: bool,
     start_year: int,
     end_year: int,
 ) -> pd.DataFrame:
@@ -121,7 +122,7 @@ def _load_daily_data(
             station_id=station_id,
             start_date=start_date,
             end_date=end_date,
-            ignore_qflag=ignore_qflag,
+            use_qflag_filter=use_qflag_filter,
         )
         if filtered_chunk_df.empty:
             continue
@@ -154,7 +155,7 @@ def _filter_daily_chunk(
     station_id: str,
     start_date: str,
     end_date: str,
-    ignore_qflag: bool,
+    use_qflag_filter: bool,
 ) -> pd.DataFrame:
     filtered_df = chunk_df[(chunk_df["DATE"] >= start_date) & (chunk_df["DATE"] <= end_date)]
     if filtered_df.empty:
@@ -172,7 +173,7 @@ def _filter_daily_chunk(
     if filtered_df.empty:
         return filtered_df
 
-    if ignore_qflag:
+    if use_qflag_filter:
         filtered_df = filtered_df[filtered_df["QFLAG"].fillna("") == ""]
 
     return filtered_df
@@ -191,6 +192,14 @@ def _add_date_parts(daily_df: pd.DataFrame) -> pd.DataFrame:
     daily_df["year"] = daily_df["DATE"].str.slice(0, 4).astype("int32")
     daily_df["month"] = daily_df["DATE"].str.slice(4, 6).astype("int8")
     return daily_df
+
+
+def _build_monthly_means(daily_df: pd.DataFrame) -> pd.DataFrame:
+    return (
+        daily_df.groupby(["year", "month", "ELEMENT"])["temperature_celsius"]
+        .mean()
+        .reset_index()
+    )
 
 
 def _build_period_views(daily_df: pd.DataFrame, is_southern: bool) -> pd.DataFrame:
@@ -227,8 +236,8 @@ def _build_period_views(daily_df: pd.DataFrame, is_southern: bool) -> pd.DataFra
 
     combined_df = pd.concat(
         [
-            year_view[["periodYear", "period", "ELEMENT", "temperature_celsius"]],
-            season_view[["periodYear", "period", "ELEMENT", "temperature_celsius"]],
+            year_view[["periodYear", "period", "month", "ELEMENT", "temperature_celsius"]],
+            season_view[["periodYear", "period", "month", "ELEMENT", "temperature_celsius"]],
         ],
         ignore_index=True,
     )

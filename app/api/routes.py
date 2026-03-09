@@ -99,7 +99,7 @@ async def station_series(
             station_id=stationId,
             start_year=startYear,
             end_year=endYear,
-            ignore_qflag=True,
+            use_qflag_filter=False,
         )
     except StationNotFoundError:
         raise HTTPException(status_code=404, detail=f"Station '{stationId}' not found.")
