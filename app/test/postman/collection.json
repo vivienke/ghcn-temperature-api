@@ -1,0 +1,512 @@
+{
+  "info": {
+    "_postman_id": "4b3c6654-99be-49a5-8cd5-0d1d373bbf2d",
+    "name": "GHCN-temperature-api system_tests",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "52793145",
+    "_collection_link": "https://go.postman.co/collection/52793145-4b3c6654-99be-49a5-8cd5-0d1d373bbf2d?source=collection_link"
+  },
+  "item": [
+    {
+      "name": "Series Tests",
+      "item": [
+        {
+          "name": "Station Series Berlin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));\r",
+                  "\r",
+                  "const body = pm.response.json();\r",
+                  "\r",
+                  "pm.test(\"stationId matches\", () => {\r",
+                  "  pm.expect(body.stationId).to.eql(pm.environment.get(\"stationIDBerlin\"));\r",
+                  "});\r",
+                  "\r",
+                  "pm.test(\"years length matches range\", () => {\r",
+                  "  pm.expect(body.years.length).to.eql(body.endYear - body.startYear + 1);\r",
+                  "});\r",
+                  "\r",
+                  "pm.test(\"YEAR_TMIN aligned with years\", () => {\r",
+                  "  pm.expect(body.series.YEAR_TMIN.length).to.eql(body.years.length);\r",
+                  "});\r",
+                  "\r",
+                  "pm.test(\"season series aligned with years\", () => {\r",
+                  "  const body = pm.response.json();\r",
+                  "  const n = body.years.length;\r",
+                  "\r",
+                  "  const keys = [\r",
+                  "    \"YEAR_TMIN\", \"YEAR_TMAX\",\r",
+                  "    \"SPRING_TMIN\", \"SPRING_TMAX\",\r",
+                  "    \"SUMMER_TMIN\", \"SUMMER_TMAX\",\r",
+                  "    \"AUTUMN_TMIN\", \"AUTUMN_TMAX\",\r",
+                  "    \"WINTER_TMIN\", \"WINTER_TMAX\"\r",
+                  "  ];\r",
+                  "\r",
+                  "  keys.forEach((k) => {\r",
+                  "    pm.expect(body.series).to.have.property(k);\r",
+                  "    pm.expect(body.series[k].length, `${k} length`).to.eql(n);\r",
+                  "  });\r",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/stations/{{stationIDBerlin}}/series?startYear=2000&endYear=2010",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "stations",
+                "{{stationIDBerlin}}",
+                "series"
+              ],
+              "query": [
+                {
+                  "key": "startYear",
+                  "value": "2000"
+                },
+                {
+                  "key": "endYear",
+                  "value": "2010"
+                }
+              ]
+            },
+            "description": "Generated from cURL: curl -X GET \"{{baseUrl}}/api/stations/{{stationId}}/series?startYear=&endYear=\""
+          },
+          "response": []
+        },
+        {
+          "name": "Station Series Hamburg",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/stations/{{stationIDHamburg}}/series?startYear=2000&endYear=2010",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "stations",
+                "{{stationIDHamburg}}",
+                "series"
+              ],
+              "query": [
+                {
+                  "key": "startYear",
+                  "value": "2000"
+                },
+                {
+                  "key": "endYear",
+                  "value": "2010"
+                }
+              ]
+            },
+            "description": "Generated from cURL: curl -X GET \"{{baseUrl}}/api/stations/{{stationId}}/series?startYear=&endYear=\""
+          },
+          "response": []
+        },
+        {
+          "name": "Station Series VS",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/stations/{{stationIDVS}}/series?startYear=2000&endYear=2010",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "stations",
+                "{{stationIDVS}}",
+                "series"
+              ],
+              "query": [
+                {
+                  "key": "startYear",
+                  "value": "2000"
+                },
+                {
+                  "key": "endYear",
+                  "value": "2010"
+                }
+              ]
+            },
+            "description": "Generated from cURL: curl -X GET \"{{baseUrl}}/api/stations/{{stationId}}/series?startYear=&endYear=\""
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Nearby",
+      "item": [
+        {
+          "name": "Stations Nearby",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"status 200\", () => pm.response.to.have.status(200));\r",
+                  "\r",
+                  "const body = pm.response.json();\r",
+                  "\r",
+                  "pm.test(\"response has results array\", () => {\r",
+                  "  pm.expect(body).to.have.property(\"results\");\r",
+                  "  pm.expect(Array.isArray(body.results)).to.be.true;\r",
+                  "});\r",
+                  "\r",
+                  "pm.test(\"returns at least 1 station\", () => {\r",
+                  "  pm.expect(body.results.length).to.be.above(0);\r",
+                  "});\r",
+                  "\r",
+                  "pm.test(\"first item has stationId + distanceKm\", () => {\r",
+                  "  const first = body.results[0];\r",
+                  "  pm.expect(first).to.have.property(\"stationId\");\r",
+                  "  pm.expect(first).to.have.property(\"distanceKm\");\r",
+                  "});\r",
+                  "\r",
+                  "pm.test(\"availability has firstYear/lastYear\", () => {\r",
+                  "  const first = body.results[0];\r",
+                  "  pm.expect(first).to.have.property(\"availability\");\r",
+                  "  pm.expect(first.availability).to.have.property(\"firstYear\");\r",
+                  "  pm.expect(first.availability).to.have.property(\"lastYear\");\r",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/stations/nearby?lat=48.0623&lon=8.4936&radiusKm=50&limit=5&startYear=2005&endYear=2015",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "stations",
+                "nearby"
+              ],
+              "query": [
+                {
+                  "key": "lat",
+                  "value": "48.0623"
+                },
+                {
+                  "key": "lon",
+                  "value": "8.4936"
+                },
+                {
+                  "key": "radiusKm",
+                  "value": "50"
+                },
+                {
+                  "key": "limit",
+                  "value": "5"
+                },
+                {
+                  "key": "startYear",
+                  "value": "2005"
+                },
+                {
+                  "key": "endYear",
+                  "value": "2015"
+                }
+              ]
+            },
+            "description": "Generated from cURL: curl -X GET \"{{baseUrl}}/api/stations/nearby?lat=&lon=&radiusKm=&limit=&startYear=&endYear=\""
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Negative Tests",
+      "item": [
+        {
+          "name": "Series",
+          "item": [
+            {
+              "name": "Station Series Invalid ID",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"invalid stationId returns 404\", () => {\r",
+                      "  pm.response.to.have.status(404);\r",
+                      "});\r",
+                      ""
+                    ],
+                    "type": "text/javascript",
+                    "packages": {},
+                    "requests": {}
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/stations/THIS_ID_DOESNT_EXIST/series?startYear=2000&endYear=2010",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "stations",
+                    "THIS_ID_DOESNT_EXIST",
+                    "series"
+                  ],
+                  "query": [
+                    {
+                      "key": "startYear",
+                      "value": "2000"
+                    },
+                    {
+                      "key": "endYear",
+                      "value": "2010"
+                    }
+                  ]
+                },
+                "description": "Generated from cURL: curl -X GET \"{{baseUrl}}/api/stations/{{stationId}}/series?startYear=&endYear=\""
+              },
+              "response": []
+            },
+            {
+              "name": "Station Series Invalid Year Range",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"returns 400 for invalid year range\", () => {\r",
+                      "  pm.response.to.have.status(400);\r",
+                      "});"
+                    ],
+                    "type": "text/javascript",
+                    "packages": {},
+                    "requests": {}
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/stations/{{stationIDBerlin}}/series?startYear=2011&endYear=2010",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "stations",
+                    "{{stationIDBerlin}}",
+                    "series"
+                  ],
+                  "query": [
+                    {
+                      "key": "startYear",
+                      "value": "2011"
+                    },
+                    {
+                      "key": "endYear",
+                      "value": "2010"
+                    }
+                  ]
+                },
+                "description": "Generated from cURL: curl -X GET \"{{baseUrl}}/api/stations/{{stationId}}/series?startYear=&endYear=\""
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Nearby",
+          "item": [
+            {
+              "name": "Nearby Missing Parameter",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"returns 422 when required parameter is missing\", () => {\r",
+                      "  pm.response.to.have.status(422);\r",
+                      "});"
+                    ],
+                    "type": "text/javascript",
+                    "packages": {},
+                    "requests": {}
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/stations/nearby?lon=8.4936&radiusKm=50&limit=5&startYear=2005&endYear=2015",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "stations",
+                    "nearby"
+                  ],
+                  "query": [
+                    {
+                      "key": "lat",
+                      "value": "48.0623",
+                      "disabled": true
+                    },
+                    {
+                      "key": "lon",
+                      "value": "8.4936"
+                    },
+                    {
+                      "key": "radiusKm",
+                      "value": "50"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "5"
+                    },
+                    {
+                      "key": "startYear",
+                      "value": "2005"
+                    },
+                    {
+                      "key": "endYear",
+                      "value": "2015"
+                    }
+                  ]
+                },
+                "description": "Generated from cURL: curl -X GET \"{{baseUrl}}/api/stations/nearby?lat=&lon=&radiusKm=&limit=&startYear=&endYear=\""
+              },
+              "response": []
+            },
+            {
+              "name": "Nearby Invalid Year Range",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"invalid stationId returns 400\", () => {\r",
+                      "  pm.response.to.have.status(400);\r",
+                      "});\r",
+                      ""
+                    ],
+                    "type": "text/javascript",
+                    "packages": {},
+                    "requests": {}
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/stations/nearby?lat=48.0623&lon=8.4936&radiusKm=50&limit=5&startYear=2011&endYear=2010",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "stations",
+                    "nearby"
+                  ],
+                  "query": [
+                    {
+                      "key": "lat",
+                      "value": "48.0623"
+                    },
+                    {
+                      "key": "lon",
+                      "value": "8.4936"
+                    },
+                    {
+                      "key": "radiusKm",
+                      "value": "50"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "5"
+                    },
+                    {
+                      "key": "startYear",
+                      "value": "2011"
+                    },
+                    {
+                      "key": "endYear",
+                      "value": "2010"
+                    }
+                  ]
+                },
+                "description": "Generated from cURL: curl -X GET \"{{baseUrl}}/api/stations/nearby?lat=&lon=&radiusKm=&limit=&startYear=&endYear=\""
+              },
+              "response": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/health",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "health"
+          ]
+        },
+        "description": "Generated from cURL: curl -X GET \"{{baseUrl}}/api/health\""
+      },
+      "response": []
+    },
+    {
+      "name": "Meta",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/meta",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "meta"
+          ]
+        },
+        "description": "Generated from cURL: curl -X GET \"{{baseUrl}}/api/meta\""
+      },
+      "response": []
+    }
+  ]
+}
