@@ -7,7 +7,7 @@ on:
 
 jobs:
   deploy:
-    name: Build Docker Image and push to GHCR
+    name: Test and Build Feature Image
     runs-on: ubuntu-latest
 
     permissions:
@@ -17,6 +17,56 @@ jobs:
     steps:
       - name: Checkout the files
         uses: actions/checkout@v4
+
+      # --- Anfang Auto-Tests ---
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio
+
+      - name: Install Node dependencies
+        run: |
+          npm ci
+
+      - name: Start backend (Docker Compose)
+        run: |
+          docker compose up -d --build
+
+      - name: Wait for API health
+        run: |
+          for i in {1..60}; do
+            if curl -sf http://localhost:8000/api/health > /dev/null; then
+              echo "API is up"
+              exit 0
+            fi
+            echo "Waiting for API..."
+            sleep 2
+          done
+          echo "API did not become ready in time"
+          docker compose logs
+          exit 1
+
+      - name: Run all tests
+        run: |
+          npm run test:all
+
+      - name: Stop backend
+        if: always()
+        run: |
+          docker compose down
+      # --- Ende Auto-Tests ---
 
       - name: Log in to the Container registry
         uses: docker/login-action@v3
