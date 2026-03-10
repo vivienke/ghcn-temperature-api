@@ -1,9 +1,9 @@
-name: Build Feature Vivien Image
+name: Build Docker Image and push to GHCR
 
 on:
   push:
     branches:
-      - feature/vivien
+      - main
 
 jobs:
   deploy:
@@ -80,4 +80,4 @@ jobs:
         with:
           context: .
           push: true
-          tags: ghcr.io/vivienke/ghcn-temperature-api-feature-vivien:latest
+          tags: ghcr.io/vivienke/ghcn-temperature-api:latest
